@@ -1,14 +1,12 @@
 <?php
 
-require('connect_db.php');
-
 if (!isset($_REQUEST)) {
 return;
 }
 
 $confirmation_token = ' fca0e00f';
 
-$token = '533f57591b94597f0e2f739bc414b35a650a14401e8c974abf33568d65380903e521a73ef9ff4ef21c092';
+$token = 'caa5390beb6b24f6f95a7b3bee6124bd1d52e68c97000354a810b0339c5ff96115a135b74913e65273eab';
 
 $data = json_decode(file_get_contents('php://input'));
 
@@ -30,42 +28,125 @@ $user_info = json_decode(file_get_contents("https://api.vk.com/method/users.get?
 $user_name = $user_info->response[0]->first_name;
 
 $msg=$data->object->body;
-$mesg=str_split($msg, 4);
-if ($mesg[0]=="/об "){
-  $mesg=str_split($msg);
-  $i=0;
-  $k=5;
-  $usmes=array();
-  while ($i<1){
-    if ($mesg[$k]!='"'){
-      array_push($usmes,$mesg[$k]);
-      $k++;
-    }else{
-      $usmes=implode($usmes);
-      $i++;
+$arr=str_split($msg);
+if ($arr[0]=="%"){
+    $len=0;
+    //Длинна сообщения и ответа
+    $k=1;
+    //номер символа в строке
+    $i=0;
+    //переменная для создания цикла
+    $mesg=array();
+    //массив с сообщением
+    $ans=array();
+    //массив с ответом
+    while($i==0){
+        //пока i=0
+        if ($arr[$k]=="%"){
+            //если символ равен знаку %...
+            $k=$k+3;
+            $i++;
+            //то сообщение уже инициализировано
+        }else{
+            if ($len>300){
+              $request_params = array(
+              'message' => "Сообщение не должно быть длиннее 300 символов.",
+              'user_id' => $user_id,
+              'access_token' => $token,
+              'v' => '5.0'
+              );
+              $get_params = http_build_query($request_params);
+              file_get_contents('https://api.vk.com/method/messages.send?'. $get_params);
+              echo('ok');
+              exit();
+            }else{
+              //если нет, то мы добавляем символ...
+              array_push($mesg, $arr[$k]);
+              $k++;
+              $len++;
+            //в массив с сообщением
+            }
+        }
     }
-  }
-  $i=0;
-  $k=$k+2;
-  $ans=array();
-  while ($i<1){
-    if ($mesg($k)!='"'){
-      array_push($ans,$mesg[$k]);
-      $k++;
-    }else{
-      $ans=implode($ans);
-      $i++;
+    $i=0;
+    $len=0;
+    while($i==0){
+        //пока i=0
+        if ($arr[$k]=="%"){
+            //если символ равен знаку %...
+            $i++;
+            //то ответ уже инициализировано
+        }else{
+            if ($len>300){
+              $request_params = array(
+              'message' => "Ответ не должен быть длиннее 300 символов.",
+              'user_id' => $user_id,
+              'access_token' => $token,
+              'v' => '5.0'
+              );
+              $get_params = http_build_query($request_params);
+              file_get_contents('https://api.vk.com/method/messages.send?'. $get_params);
+              echo('ok');
+              exit();
+            }else{
+              //если нет, то мы добавляем символ...
+              array_push($ans, $arr[$k]);
+              $k++;
+              $len++;
+              //в массив с ответом
+            }
+        }
     }
+    $mesg=implode($mesg);
+    $ans=implode($ans);
+    require('connect_db.php');
+    $sql="INSERT INTO Answers
+    (mes, ans)
+    VALUES
+    ('$mesg', '$ans')";
+    mysqli_query($dbc, $sql);
+    $request_params = array(
+    'message' => "Я записала ваш ответ.",
+    'user_id' => $user_id,
+    'access_token' => $token,
+    'v' => '5.0'
+    );
+    $get_params = http_build_query($request_params);
+    file_get_contents('https://api.vk.com/method/messages.send?'. $get_params);
+    mysqli_close($dbc);
+}else{
+  require('connect_db.php');
+  $sql="SELECT * FROM Answers WHERE mes='$msg'";
+  $result=mysqli_query($dbc, $sql);
+  if (mysqli_num_rows($result)>0){
+  $row=mysqli_fetch_array($result, MYSQLI_ASSOC);
+  $request_params = array(
+  'message' => $row['ans'],
+  'user_id' => $user_id,
+  'access_token' => $token,
+  'v' => '5.0'
+  );
+  $get_params = http_build_query($request_params);
+  file_get_contents('https://api.vk.com/method/messages.send?'. $get_params);
+  }else{
+    $request_params = array(
+    'message' => "У меня нет ответа. Попробуй научить меня с помощью команды %xxx% %yyy%, где xxx-сообщение, а yyy-ответ.",
+    'user_id' => $user_id,
+    'access_token' => $token,
+    'v' => '5.0'
+  );
+  $get_params = http_build_query($request_params);
+  file_get_contents('https://api.vk.com/method/messages.send?'. $get_params);
   }
-  $sql="INSERT INTO Answers
-  (mes, ans)
-  VALUES
-  ('$usmes', '$ans')";
-  mysqli_query($dbc, $sql);
+  /*$request_params = array(
+  'message' => $msg,
+  'user_id' => $user_id,
+  'access_token' => $token,
+  'v' => '5.0'
+  );
+  $get_params = http_build_query($request_params);
+  file_get_contents('https://api.vk.com/method/messages.send?'. $get_params);*/
 }
-
-//Возвращаем "ok" серверу Callback API
 echo('ok');
-mysqli_close($dbc);
 break;
 }
